@@ -1,0 +1,9 @@
+.idea
+.project
+venv/
+venv/*
+__pycache__/
+__pycache__/*
+hinata.conf
+hanokh.conf
+gunicorn.py

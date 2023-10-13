@@ -1,0 +1,10 @@
+set use_from=yes
+set mbox=+Inbox
+set spoolfile=+Inbox
+set envelope_from_address='noe@hanokh.com.br'
+set from='noe@hanokh.com.br'
+set force_name=yes
+set realname='NOE'
+set my_user=noe@hanokh.com.br
+set my_pass='5kTcxwqaqDUvsxfQucxaCUp2M0eK2CcGA5CfDn1M'
+set smtp_url=smtps://$my_user:$my_pass@valentino.hanokh.com.br:465

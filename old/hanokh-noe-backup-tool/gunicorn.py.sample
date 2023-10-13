@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+# coding: utf-8
+
+bind = "127.0.0.1:5003"
+worker_class = "gevent"
+workers = 5
+timeout = 3600
+preload = True
+accesslog = "/var/log/noe.log"
+errorlog = "/var/log/noe_error.log"

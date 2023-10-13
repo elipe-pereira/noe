@@ -1,0 +1,19 @@
+[Unit]
+Description=Gunicorn daemon
+After=network.target
+
+[Service]
+Environment="PROJ_BASEPATH=/srv/noe/prod"
+Type=notify
+User=root
+Group=root
+WorkingDirectory=/srv/noe/prod
+#execStartPre=/bin/sh -c "source /usr/share/noe/venv/bin/activate"
+ExecStart=/srv/noe/prod/venv/bin/gunicorn -c /srv/noe/prod/gunicorn.py app:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,112 @@
+stages:
+  - deploy-teste
+  - deploy-hom
+  - deploy-prod
+
+variables:
+  path_teste: /srv/noe/teste
+  path_hom: /srv/noe/hom
+  path_prod: /srv/noe/prod
+  repo_folder: ../hanokh-noe/
+  ssh_user: root
+  server: patolino
+  py_version: python3.8
+
+deploy teste:
+  stage: deploy-teste
+
+  script:
+    - ssh $ssh_user@$server "test -d $path_teste || mkdir -p $path_teste"
+    - rsync --exclude=.git -av $repo_folder $ssh_user@$server:$path_teste
+    - ssh $ssh_user@$server "apt-get install python3-venv"
+    - ssh $ssh_user@$server "apt-get install libpq-dev"
+    - ssh $ssh_user@$server "cd $path_teste && python3 -m venv venv"
+    - ssh $ssh_user@$server "$path_teste/venv/bin/pip install pip --upgrade"
+
+    - ssh $ssh_user@$server
+      "$path_teste/venv/bin/pip install -r $path_teste/requirements.txt"
+
+    - ssh $ssh_user@$ssh_server
+      "cp -av $path_teste/gunicorn.py.sample $path_teste/gunicorn.py"
+
+    - ssh $ssh_user@$server
+      "test -h $path_teste/venv/lib/$py_version/site-packages/proj_config.py
+      || ln -s $path_teste/proj_config.py
+       $path_test/venv/lib/$py_version/site-packages/proj_config.py"
+
+    - ssh $ssh_user@$server
+      "test -f /lib/systemd/system/hanokh@no-teste.service ||
+      cp $path_test/files/hanokh@noe-teste.service /lib/systemd/system"
+
+    - ssh $ssh_user@$server "systemctl enable hanokh@noe-teste.service"
+
+    - ssh $ssh_user@$server "service hanokh@noe-teste restart"
+    - echo "Application successfully deployed."
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main-teste'
+
+deploy hom:
+  stage: deploy-hom
+
+  script:
+    - ssh $ssh_user@$server "test -d $path_hom || mkdir -p $path_hom"
+    - rsync --exclude=.git -av $repo_folder $ssh_user@$server:$path_hom
+    - ssh $ssh_user@$server "apt-get install python3-venv"
+    - ssh $ssh_user@$server "apt-get install libpq-dev"
+    - ssh $ssh_user@$server "cd $path_hom && python3 -m venv venv"
+    - ssh $ssh_user@$server "$path_hom/venv/bin/pip install pip --upgrade"
+
+    - ssh $ssh_user@$server
+      "$path_hom/venv/bin/pip install -r $path_hom/requirements.txt"
+
+    - ssh $ssh_user@$server
+      "test -h $path_hom/venv/lib/$py_version/site-packages/proj_config.py
+      || ln -s $path_hom/proj_config.py
+        $path_hom/venv/lib/$py_version/site-packages/proj_config.py"
+
+    - ssh $ssh_user@$server
+      "test -f $path_hom/gunicorn.py ||
+        cp -av $path_hom/gunicorn.py.sample $path_hom/gunicorn.py"
+
+    - ssh $ssh_user@$server "test -f /lib/systemd/system/hanokh@noe-hom.service
+      || cp -av $path_hom/files/hanokh@noe-hom.service /lib/systemd/system"
+
+    - ssh $ssh_user@$server "systemctl enable hanokh@noe-hom.service"
+
+    - ssh $ssh_user@$server "service hanokh@hom restart"
+    - echo "Application hom deployed"
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+
+deploy release:
+  stage: deploy-prod
+
+  script:
+    - ssh $ssh_user@$server "test -d $path_prod || mkdir -p $path_prod"
+    - rsync --exclude=.git -av $repo_folder $ssh_user@$server:$path_prod
+    - ssh $ssh_user@$server "apt-get install python3-venv"
+    - ssh $ssh_user@$server "apt-get install libpq-dev"
+    - ssh $ssh_user@$server "cd $path_prod && python3 -m venv venv"
+    - ssh $ssh_user@$server "$path_prod/venv/bin/pip install pip --upgrade"
+
+    - ssh $ssh_user@$server
+      "$path_prod/venv/bin/pip install -r $path_prod/requirements.txt"
+
+    - ssh $ssh_user@$server
+      "test -h $path_prod/venv/lib/$py_version/site-packages/proj_config.py
+      || ln -s $path_prod/proj_config.py
+        $path_prod/venv/lib/$py_version/site-packages/proj_config.py"
+
+    - ssh $ssh_user@$server
+      "test -f $path_prod/gunicorn.py ||
+        cp -av $path_prod/gunicorn.py.sample $path_hom/gunicorn.py"
+
+    - ssh $ssh_user@$server "test -f /lib/systemd/system/hanokh@noe-prod.service
+      || cp -av $path_prod/files/hanokh@noe-prod.service /lib/systemd/system"
+
+    - ssh $ssh_user@$server "systemctl enable hanokh@noe-prod.service"
+
+    - ssh $ssh_user@$server "service hanokh@noe-prod restart"
+    - echo "Application prod deployed"
+  rules:
+    - if: $CI_COMMIT_TAG

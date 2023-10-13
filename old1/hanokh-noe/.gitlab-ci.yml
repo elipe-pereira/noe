@@ -1,0 +1,152 @@
+.create-deb-package: &create-deb-package
+  - echo "Criando pasta DEBIAN"
+  - ssh "$ssh_user"@"$server" "test ! -d /tmp/$package/DEBIAN || rm -rf /tmp/$package"
+  - ssh "$ssh_user"@"$server" "mkdir /tmp/$package"
+  - ssh "$ssh_user"@"$server" "mkdir /tmp/$package/DEBIAN"
+
+  - echo "Adicionando parametros essenciais ao arquivo control"
+  - ssh "$ssh_user"@"$server" "echo Section:$section >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Package:$package >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Priority:$priority >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Version:$version >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Architecture:$architecture >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Maintainer:$maintainer >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Depends:$depends >> /tmp/$package/DEBIAN/control"
+  - ssh "$ssh_user"@"$server" "echo Description:$description >> /tmp/$package/DEBIAN/control"
+  
+  - echo "Criando arquivo preinst localmente"
+  - echo "$cmd_preinst" >> /tmp/preinst-noe
+
+  - echo "Criando arquivo cmd_postinst localmente"
+  - echo "$cmd_postinst" >> /tmp/postinst-noe
+
+  - echo "Criando arquivo postrm localmente"
+  - echo "$cmd_postrm" >> /tmp/postrm-noe
+
+  - echo "Copiando arquivos"
+  - scp /tmp/preinst-noe "$ssh_user"@"$server":/tmp/"$package"/DEBIAN/preinst
+  - scp /tmp/postinst-noe "$ssh_user"@"$server":/tmp/"$package"/DEBIAN/postinst
+  - scp /tmp/postrm-noe "$ssh_user"@"$server":/tmp/"$package"/DEBIAN/postrm
+
+  - echo "Removendo arquivos"
+  - rm /tmp/preinst-noe
+  - rm /tmp/postinst-noe
+  - rm /tmp/postrm-noe
+  
+  - echo "Dando permissão de execução aos arquivos dentro da pasta DEBIAN"
+  - ssh "$ssh_user"@"$server" "chmod +x /tmp/$package/DEBIAN/*"
+ 
+  
+  - echo "Criando pasta e transferindo arquivos do repositório"
+  - ssh "$ssh_user"@"$server" "mkdir -p /tmp/$package/usr/share/$package"
+  - rsync -av --no-o --no-g * "$ssh_user"@"$server":"/tmp/$package/usr/share/$package"
+  
+  - echo "Deixando o usuário root como dono dos arquivos"
+  - ssh $ssh_user@$server "chown -R root.root /tmp/$package"
+
+  - echo "Efetuando o empacotamento"
+  - ssh $ssh_user@$server "dpkg -b /tmp/$package /tmp"
+  
+  - echo "Enviando o arquivo empacotado para o repositório"
+  - ssh $ssh_user@$server "reprepro -b $repo_path/$distro includedeb $release /tmp/'$package'_'$version'_'$architecture'.deb"
+
+  - echo "Limpando arquivos"
+  - ssh $ssh_user@$server "test -d /tmp/$package/DEBIAN && rm -rf /tmp/$package*"
+
+stages:
+  - deploy-teste
+  - deploy-hom
+  - deploy-prod
+
+variables:
+  ssh_user: root
+  server: patolino
+  maintainer: "Hanokh Software Labs"
+  depends: "tar, s3fs, mutt, cifs-utils, tmpreaper, python3-venv, python3-pip, libpq-dev, python3-setuptools, python3-wheel"
+  description: "Faz backup do sistema operacional"
+  cmd_preinst: "#!/bin/bash \n
+    ! test -f /etc/noe/noe.conf || cp -av /etc/noe/noe.conf /tmp \n
+    ! test -f /etc/noe/exclude_list.txt || cp -av /etc/noe/exclude_list.txt /tmp \n
+  "
+  cmd_postinst: "#!/bin/bash \n
+    test -h /etc/noe || ln -s /usr/share/noe/core/config/noe /etc/noe \n
+    test -h /usr/bin/noe || ln -s /usr/share/noe/core/noe.py /usr/bin/noe \n
+    test ! -f /tmp/noe.conf || cp -av /tmp/noe.conf /etc/noe \n
+    test ! -f /tmp/exclude_list.txt || cp -av /tmp/exclude_list.txt /etc/noe \n
+
+    test ! -d /usr/share/noe/venv ||rm -rf /usr/share/noe/venv \n
+
+    cd /usr/share/noe && python3 -m venv venv \n
+    source venv/bin/activate \n
+    pip install pip --upgrade \n
+    pip install -r requirements.txt \n
+    deactivate \n
+
+    PY_VERSION=$$(python3 /usr/share/noe/helpers/py_version.py) \n
+
+    ln -s /usr/share/noe/proj_config.py /usr/share/noe/venv/lib/$$PY_VERSION/site-packages/proj_config.py \n
+
+    cd /usr/share/noe \n 
+    
+    test -f hanokh.conf || cp hanokh.conf.sample hanokh.conf \n
+    test -f gunicorn.py || cp gunicorn.py.sample gunicorn.py \n
+    test -d /var/log/hanokh || mkdir /var/log/hanokh \n
+    test -f /lib/systemd/system/hanokh@noe.service || cp -av files/hanokh@noe.service /lib/systemd/system \n
+  "
+  cmd_postrm: "#!/bin/bash \n 
+    test ! -h /etc/noe || unlink /etc/noe \n
+    test ! -h /usr/bin/noe || unlink /usr/bin/noe \n
+  "
+
+deploy teste:
+  stage: deploy-teste
+
+  variables:
+    env: teste
+    project_dest: /srv/noe/"$env"
+
+  script:
+    -  echo "ok"
+
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main-teste'
+
+deploy hom:
+  stage: deploy-hom
+
+  variables:
+    env: hom
+    project_dest: /srv/noe/"$env"
+    repo_path: /srv/repo/testing
+    distro: debian
+    release: hanokh
+    package: noe
+    priority: optional
+    version: "0.12.4-17"
+    architecture: all
+
+  script:
+    - *create-deb-package
+
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+
+deploy release:
+  stage: deploy-prod
+
+  variables:
+    env: prod
+    project_dest: /srv/noe/"$env"
+    repo_path: /srv/repo/packages
+    distro: debian
+    release: hanokh
+    package: noe
+    priority: optional
+    version: $CI_COMMIT_TAG
+    architecture: all
+
+  script:
+    - *create-deb-package
+
+  rules:
+    - if: $CI_COMMIT_TAG

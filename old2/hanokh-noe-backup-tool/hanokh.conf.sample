@@ -1,0 +1,18 @@
+[hinata]
+
+##########
+# Página #
+##########
+
+DOMAIN_BASE_URL="localhost:5000"
+
+##################
+# Banco de dados #
+##################
+
+DATABASE_TYPE=postgresql
+DATABASE_NAME=hinata
+DATABASE_user=hinata
+DATABASE_PASSWORD=
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=5432
